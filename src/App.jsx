@@ -1,4 +1,5 @@
-﻿import { useState } from "react";
+﻿
+import { useEffect, useState } from "react";
 import { Link, Route, Routes } from "react-router-dom";
 import Students from "./Students.jsx";
 import "./App.css";
@@ -74,7 +75,8 @@ function Registration({ students, onAddStudent }) {
       (student) =>
         student.student_id.toLowerCase() ===
           form.student_id.trim().toLowerCase() ||
-        student.email.toLowerCase() === form.email.trim().toLowerCase()
+        student.email.toLowerCase() ===
+          form.email.trim().toLowerCase()
     );
 
     if (duplicate) {
@@ -192,7 +194,27 @@ function Registration({ students, onAddStudent }) {
 }
 
 function App() {
-  const [students, setStudents] = useState(initialStudents);
+  // Load saved student records when the app starts.
+  const [students, setStudents] = useState(() => {
+    try {
+      const savedStudents = localStorage.getItem("students");
+
+      return savedStudents
+        ? JSON.parse(savedStudents)
+        : initialStudents;
+    } catch {
+      return initialStudents;
+    }
+  });
+
+  // Automatically save student records whenever they change.
+  useEffect(() => {
+    try {
+      localStorage.setItem("students", JSON.stringify(students));
+    } catch (error) {
+      console.error("Unable to save student records:", error);
+    }
+  }, [students]);
 
   function handleAddStudent(newStudent) {
     setStudents((previousStudents) => [
@@ -219,6 +241,7 @@ function App() {
               />
             }
           />
+
           <Route
             path="/students"
             element={
