@@ -3,60 +3,99 @@ import { Link, Route, Routes } from "react-router-dom";
 import Students from "./Students.jsx";
 import "./App.css";
 
-const API_URL = "http://localhost:5000/api/students";
+const initialStudents = [];
 
-function Registration() {
-  const [saving, setSaving] = useState(false);
+const initialFormData = {
+  student_id: "",
+  name: "",
+  age: "",
+  email: "",
+  course: "",
+  status: "Enrolled",
+};
+
+function Registration({ students, onAddStudent }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
-  const [form, setForm] = useState({
-    student_id: "",
-    name: "",
-    age: "",
-    email: "",
-    course: "",
-    status: "Enrolled",
-  });
+  const [form, setForm] = useState({ ...initialFormData });
 
   function handleChange(event) {
     const { name, value } = event.target;
-    setForm((previous) => ({ ...previous, [name]: value }));
+
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
   }
 
-  async function handleSubmit(event) {
+  function handleSubmit(event) {
     event.preventDefault();
-    setSaving(true);
     setMessage("");
     setError("");
 
-    try {
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, age: Number(form.age) }),
-      });
+    const age = Number(form.age);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Could not save student.");
-      }
-
-      setMessage("Student saved successfully in the database!");
-      setForm({
-        student_id: "",
-        name: "",
-        age: "",
-        email: "",
-        course: "",
-        status: "Enrolled",
-      });
-    } catch (err) {
-      setError(err.message || "Could not save student.");
-    } finally {
-      setSaving(false);
+    if (!form.student_id.trim()) {
+      setError("Please enter the student ID.");
+      return;
     }
+
+    if (!form.name.trim()) {
+      setError("Please enter the student's full name.");
+      return;
+    }
+
+    if (
+      form.age.trim() === "" ||
+      !Number.isInteger(age) ||
+      age < 1 ||
+      age > 120
+    ) {
+      setError("Age must be a whole number between 1 and 120.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    if (!form.course.trim()) {
+      setError("Please enter the student's course.");
+      return;
+    }
+
+    if (!["Enrolled", "Pending"].includes(form.status)) {
+      setError("Please select a valid enrollment status.");
+      return;
+    }
+
+    const duplicate = students.some(
+      (student) =>
+        student.student_id.toLowerCase() ===
+          form.student_id.trim().toLowerCase() ||
+        student.email.toLowerCase() === form.email.trim().toLowerCase()
+    );
+
+    if (duplicate) {
+      setError("A student with this ID or email already exists.");
+      return;
+    }
+
+    const newStudent = {
+      id: Date.now(),
+      student_id: form.student_id.trim(),
+      name: form.name.trim(),
+      age,
+      email: form.email.trim(),
+      course: form.course.trim(),
+      status: form.status,
+    };
+
+    onAddStudent(newStudent);
+
+    setMessage("Student registered successfully!");
+    setForm({ ...initialFormData });
   }
 
   return (
@@ -71,12 +110,13 @@ function Registration() {
 
         <form onSubmit={handleSubmit} className="student-form">
           <label>
-            Student ID (optional)
+            Student ID
             <input
               name="student_id"
               value={form.student_id}
               onChange={handleChange}
               placeholder="e.g. STU001"
+              required
             />
           </label>
 
@@ -98,6 +138,7 @@ function Registration() {
               type="number"
               min="1"
               max="120"
+              step="1"
               value={form.age}
               onChange={handleChange}
               placeholder="Enter age"
@@ -130,15 +171,17 @@ function Registration() {
 
           <label>
             Status
-            <select name="status" value={form.status} onChange={handleChange}>
+            <select
+              name="status"
+              value={form.status}
+              onChange={handleChange}
+            >
               <option value="Enrolled">Enrolled</option>
               <option value="Pending">Pending</option>
             </select>
           </label>
 
-          <button type="submit" disabled={saving}>
-            {saving ? "Saving..." : "Save Student"}
-          </button>
+          <button type="submit">Save Student</button>
         </form>
 
         {message && <p role="status">{message}</p>}
@@ -149,6 +192,15 @@ function Registration() {
 }
 
 function App() {
+  const [students, setStudents] = useState(initialStudents);
+
+  function handleAddStudent(newStudent) {
+    setStudents((previousStudents) => [
+      ...previousStudents,
+      newStudent,
+    ]);
+  }
+
   return (
     <div className="app">
       <nav className="navigation">
@@ -158,8 +210,24 @@ function App() {
 
       <main className="main-content">
         <Routes>
-          <Route path="/" element={<Registration />} />
-          <Route path="/students" element={<Students />} />
+          <Route
+            path="/"
+            element={
+              <Registration
+                students={students}
+                onAddStudent={handleAddStudent}
+              />
+            }
+          />
+          <Route
+            path="/students"
+            element={
+              <Students
+                students={students}
+                setStudents={setStudents}
+              />
+            }
+          />
         </Routes>
       </main>
     </div>

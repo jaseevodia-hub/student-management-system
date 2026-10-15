@@ -1,7 +1,4 @@
-﻿
-import { useEffect, useState } from "react";
-
-const API_URL = "http://localhost:5000/api/students";
+﻿import { useState } from "react";
 
 const initialFormData = {
   student_id: "",
@@ -12,21 +9,7 @@ const initialFormData = {
   status: "Pending",
 };
 
-// Read the server response safely.
-async function readResponse(response) {
-  try {
-    return await response.json();
-  } catch {
-    return {};
-  }
-}
-
-// Use the backend's message first, with a fallback.
-function getErrorMessage(result, fallback) {
-  return result.message || result.error || fallback;
-}
-
-// Reusable React component demonstrating props.
+// Reusable component demonstrating React props.
 function StudentSummary({ total, matching }) {
   return (
     <div className="student-count">
@@ -36,9 +19,7 @@ function StudentSummary({ total, matching }) {
   );
 }
 
-function Students() {
-  const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
+function Students({ students, setStudents }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -47,41 +28,7 @@ function Students() {
   const [editingStudent, setEditingStudent] = useState(null);
   const [deletingStudent, setDeletingStudent] = useState(null);
 
-  const [formData, setFormData] = useState(initialFormData);
-
-  // Retrieve student records from the API.
-  async function fetchStudents() {
-    try {
-      setLoading(true);
-      setError("");
-
-      const response = await fetch(API_URL);
-      const result = await readResponse(response);
-
-      if (!response.ok) {
-        throw new Error(
-          getErrorMessage(result, "Failed to load students.")
-        );
-      }
-
-      if (!Array.isArray(result)) {
-        throw new Error("The server returned an unexpected response.");
-      }
-
-      setStudents(result);
-    } catch (err) {
-      setError(
-        err.message ||
-          "Could not load students. Check that the backend is running."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    fetchStudents();
-  }, []);
+  const [formData, setFormData] = useState({ ...initialFormData });
 
   // Update form fields when the user types.
   function handleChange(event) {
@@ -127,7 +74,7 @@ function Students() {
     setError("");
   }
 
-  // Validate the form before sending data to the API.
+  // Validate the form before saving.
   function validateForm() {
     if (!formData.student_id.trim()) {
       setError("Please enter the student ID.");
@@ -176,90 +123,80 @@ function Students() {
     return true;
   }
 
-  // Add a new student or update an existing student.
-  async function handleSubmit(event) {
+  // Add a student or update an existing student.
+  function handleSubmit(event) {
     event.preventDefault();
     setError("");
 
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
+
+    const studentData = {
+      student_id: formData.student_id.trim(),
+      name: formData.name.trim(),
+      age: Number(formData.age),
+      email: formData.email.trim(),
+      course: formData.course.trim(),
+      status: formData.status,
+    };
 
     const isEditing = Boolean(editingStudent);
 
-    try {
-      setSaving(true);
+    // Prevent duplicate student IDs or email addresses.
+    const duplicate = students.some(
+      (student) =>
+        (
+          student.student_id.toLowerCase() ===
+            studentData.student_id.toLowerCase() ||
+          student.email.toLowerCase() ===
+            studentData.email.toLowerCase()
+        ) && student.id !== editingStudent?.id
+    );
 
-      const url = isEditing
-        ? `${API_URL}/${editingStudent.id}`
-        : API_URL;
-
-      const response = await fetch(url, {
-        method: isEditing ? "PUT" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          student_id: formData.student_id.trim(),
-          name: formData.name.trim(),
-          age: Number(formData.age),
-          email: formData.email.trim(),
-          course: formData.course.trim(),
-          status: formData.status,
-        }),
-      });
-
-      const result = await readResponse(response);
-
-      if (!response.ok) {
-        throw new Error(
-          getErrorMessage(
-            result,
-            `Failed to ${isEditing ? "update" : "add"} student.`
-          )
-        );
-      }
-
-      setAddingStudent(false);
-      setEditingStudent(null);
-      setFormData({ ...initialFormData });
-
-      await fetchStudents();
-    } catch (err) {
-      setError(err.message || "Could not save the student.");
-    } finally {
-      setSaving(false);
+    if (duplicate) {
+      setError("A student with this ID or email already exists.");
+      return;
     }
+
+    setSaving(true);
+
+    if (isEditing) {
+      setStudents((previousStudents) =>
+        previousStudents.map((student) =>
+          student.id === editingStudent.id
+            ? { ...student, ...studentData }
+            : student
+        )
+      );
+    } else {
+      const newStudent = {
+        id: Date.now(),
+        ...studentData,
+      };
+
+      setStudents((previousStudents) => [
+        ...previousStudents,
+        newStudent,
+      ]);
+    }
+
+    setAddingStudent(false);
+    setEditingStudent(null);
+    setFormData({ ...initialFormData });
+    setSaving(false);
   }
 
   // Delete a student after confirmation.
-  async function handleDelete() {
+  function handleDelete() {
     if (!deletingStudent || saving) return;
 
-    try {
-      setSaving(true);
-      setError("");
+    setStudents((previousStudents) =>
+      previousStudents.filter(
+        (student) => student.id !== deletingStudent.id
+      )
+    );
 
-      const response = await fetch(
-        `${API_URL}/${deletingStudent.id}`,
-        { method: "DELETE" }
-      );
-
-      const result = await readResponse(response);
-
-      if (!response.ok) {
-        throw new Error(
-          getErrorMessage(result, "Failed to delete student.")
-        );
-      }
-
-      setDeletingStudent(null);
-      await fetchStudents();
-    } catch (err) {
-      setError(err.message || "Failed to delete student.");
-    } finally {
-      setSaving(false);
-    }
+    setDeletingStudent(null);
+    setError("");
   }
 
   // Search by student ID, name, email, or course.
@@ -308,7 +245,6 @@ function Students() {
         />
       </div>
 
-      {/* Props are passed from Students to StudentSummary. */}
       <StudentSummary
         total={totalStudents}
         matching={displayedStudents}
@@ -317,18 +253,10 @@ function Students() {
       {error && !isFormOpen && !deletingStudent && (
         <div className="error-message" role="alert">
           <p>{error}</p>
-
-          {!loading && (
-            <button type="button" onClick={fetchStudents}>
-              Retry
-            </button>
-          )}
         </div>
       )}
 
-      {loading ? (
-        <p>Loading students...</p>
-      ) : students.length === 0 ? (
+      {students.length === 0 ? (
         <p>No student records found. Click Add Student to get started.</p>
       ) : filteredStudents.length === 0 ? (
         <p>
@@ -511,7 +439,15 @@ function Students() {
 
       {/* Delete confirmation modal */}
       {deletingStudent && (
-        <div className="modal-overlay">
+        <div
+          className="modal-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setDeletingStudent(null);
+              setError("");
+            }
+          }}
+        >
           <section
             className="modal-content"
             role="dialog"
@@ -533,17 +469,12 @@ function Students() {
             )}
 
             <div className="modal-actions">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={handleDelete}
-              >
-                {saving ? "Deleting..." : "Yes, Delete"}
+              <button type="button" onClick={handleDelete}>
+                Yes, Delete
               </button>
 
               <button
                 type="button"
-                disabled={saving}
                 onClick={() => {
                   setDeletingStudent(null);
                   setError("");
